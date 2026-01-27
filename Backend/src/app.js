@@ -37,7 +37,10 @@ if (process.env.NODE_ENV === 'production') {
     app.use(express.static(frontendPath))
     
 app.use((req, res) => {
-  res.sendFile(path.resolve(__dirname, '../Frontend/dist/index.html'))
+ res.sendFile(
+  path.resolve(process.cwd(), 'Frontend/dist/index.html')
+)
+
 })
 
 

@@ -6,108 +6,136 @@ import {
   useState,
   useEffect,
 } from 'react'
+import { ML_API_URL, WEATHER_API_KEY } from '../config/api'
 
 const BookingContext = createContext(null)
 
-// const ML_API_URL = 'http://10.93.76.209.:8000'
-const ML_API_URL = 'http://localhost:8001'
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+const WEATHER_FALLBACK = { temperature: 28, precipitation: 0 }
+const DEFAULT_WEATHER_LOCATION = { lat: 21.233, lon: 72.867, label: 'Surat, Gujarat' }
 
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
 
-const TEMPLE_NAME = 'Ambaji'
+const festivalKeywords = [
+  { value: 'Diwali', label: 'Diwali', keywords: ['diwali', 'deepavali'] },
+  { value: 'Holi', label: 'Holi', keywords: ['holi'] },
+  { value: 'Janmashtami', label: 'Janmashtami', keywords: ['janmashtami'] },
+  { value: 'Makar Sankranti', label: 'Makar Sankranti', keywords: ['makar sankranti', 'makara sankranti', 'pongal'] },
+  { value: 'MahaShivratri', label: 'Maha Shivaratri', keywords: ['maha shivaratri', 'maha shivratri', 'shivaratri'] },
+  { value: 'Navratri', label: 'Navratri', keywords: ['navratri', 'navaratri', 'maha navami'] },
+]
 
-const navratriDates = {
-  2025: { sharad: "2025-09-22", chaitra: "2025-03-30" },
-  2026: { sharad: "2026-09-12", chaitra: "2026-03-20" },
-  2027: { sharad: "2027-10-02", chaitra: "2027-04-08" },
-  2028: { sharad: "2028-09-21", chaitra: "2028-03-28" },
-  2029: { sharad: "2029-09-10", chaitra: "2029-03-17" },
-  2030: { sharad: "2030-09-30", chaitra: "2030-04-06" }
+const publicHolidayKeywords = [
+  'Independence Day',
+  'Gandhi Jayanti',
+  'Republic Day',
+]
+
+const calendarCache = new Map()
+
+function padDatePart(value) {
+  return String(value).padStart(2, '0')
 }
 
-const navratriDays = [
-  { day: 1, goddess: "Shailputri", color: "White" },
-  { day: 2, goddess: "Brahmacharini", color: "Red" },
-  { day: 3, goddess: "Chandraghanta", color: "Royal Blue" },
-  { day: 4, goddess: "Kushmanda", color: "Yellow" },
-  { day: 5, goddess: "Skandamata", color: "Green" },
-  { day: 6, goddess: "Katyayani", color: "Grey" },
-  { day: 7, goddess: "Kalaratri", color: "Orange" },
-  { day: 8, goddess: "Mahagauri", color: "Peacock Green" },
-  { day: 9, goddess: "Siddhidatri", color: "Pink" }
-]
-
-const allowedFestivals = [
-  "Diwali",
-  "Holi",
-  "Janmashtami",
-  "Makar Sankranti",
-  "MahaShivratri",
-  "Navratri"
-]
-
-const publicHolidays = [
-  "Independence Day",
-  "Gandhi Jayanti",
-  "Republic Day"
-]
-
-function isNavratri(inputDate, year) {
-  const dateObj = new Date(inputDate)
-  const navratri = navratriDates[year]
-  
-  if (!navratri) return null
-  
-  const sharadStart = new Date(navratri.sharad)
-  const sharadEnd = new Date(sharadStart)
-  sharadEnd.setDate(sharadEnd.getDate() + 8) 
-  
-  if (dateObj >= sharadStart && dateObj <= sharadEnd) {
-    const dayNumber = Math.floor((dateObj - sharadStart) / (1000 * 60 * 60 * 24)) + 1
-    return { type: "Sharad Navratri", day: dayNumber, ...navratriDays[dayNumber - 1] }
-  }
-  
-  const chaitraStart = new Date(navratri.chaitra)
-  const chaitraEnd = new Date(chaitraStart)
-  chaitraEnd.setDate(chaitraEnd.getDate() + 8)
-  
-  if (dateObj >= chaitraStart && dateObj <= chaitraEnd) {
-    const dayNumber = Math.floor((dateObj - chaitraStart) / (1000 * 60 * 60 * 24)) + 1
-    return { type: "Chaitra Navratri", day: dayNumber, ...navratriDays[dayNumber - 1] }
-  }
-  
-  return null
+function parseDateParts(dateString) {
+  const [year, month, day] = dateString.split('-').map(Number)
+  return { year, month, day }
 }
 
-function matchFestival(fetchedFestival) {
-  if (!fetchedFestival) return "None"
-  
-  const lowerFetched = fetchedFestival.toLowerCase()
-  
-  for (const allowed of allowedFestivals) {
-    if (lowerFetched.includes(allowed.toLowerCase())) {
-      return allowed
+function formatDateKey(date) {
+  return [
+    date.getFullYear(),
+    padDatePart(date.getMonth() + 1),
+    padDatePart(date.getDate()),
+  ].join('-')
+}
+
+function dateStringToUtcMs(dateString) {
+  const { year, month, day } = parseDateParts(dateString)
+  return Date.UTC(year, month - 1, day)
+}
+
+function getDaysAhead(visitDate) {
+  const today = formatDateKey(new Date())
+  return Math.round((dateStringToUtcMs(visitDate) - dateStringToUtcMs(today)) / MS_PER_DAY)
+}
+
+async function loadCalendarData(year) {
+  if (calendarCache.has(year)) {
+    return calendarCache.get(year)
+  }
+
+  const response = await fetch(`https://jayantur13.github.io/calendar-bharat/calendar/${year}.json`)
+
+  if (!response.ok) {
+    throw new Error('Calendar data not available')
+  }
+
+  const data = await response.json()
+  calendarCache.set(year, data)
+  return data
+}
+
+function matchFestival(eventName) {
+  const lowerEventName = eventName.toLowerCase()
+  const match = festivalKeywords.find((festival) =>
+    festival.keywords.some((keyword) => lowerEventName.includes(keyword))
+  )
+
+  return match || null
+}
+
+function isPublicHoliday(eventName, eventType) {
+  const lowerEventName = eventName.toLowerCase()
+  const hasHolidayName = publicHolidayKeywords.some((holiday) =>
+    lowerEventName.includes(holiday.toLowerCase())
+  )
+
+  return hasHolidayName || eventType.toLowerCase().includes('government holiday')
+}
+
+function getCalendarEntry(calendarData, visitDate) {
+  const { year, month, day } = parseDateParts(visitDate)
+  const monthName = monthNames[month - 1]
+  const monthData = calendarData?.[String(year)]?.[`${monthName} ${year}`]
+
+  if (!monthData) {
+    return null
+  }
+
+  const datePrefix = `${monthName} ${day}, ${year},`
+  const found = Object.entries(monthData).find(([dateKey]) => dateKey.startsWith(datePrefix))
+
+  return found ? found[1] : null
+}
+
+function getWeatherLocationForTemple(temple) {
+  if (temple?.weather?.lat && temple?.weather?.lon) {
+    return {
+      query: `${temple.weather.lat},${temple.weather.lon}`,
+      label: temple.city || temple.name,
     }
   }
-  
-  return "None"
-}
 
-function matchPublicHoliday(fetchedEvent) {
-  if (!fetchedEvent) return false
-  
-  const lowerFetched = fetchedEvent.toLowerCase()
-  
-  for (const holiday of publicHolidays) {
-    if (lowerFetched.includes(holiday.toLowerCase())) {
-      return true
+  if (temple?.city) {
+    return {
+      query: `${temple.city}, India`,
+      label: temple.city,
     }
   }
-  
-  return false
+
+  return {
+    query: `${DEFAULT_WEATHER_LOCATION.lat},${DEFAULT_WEATHER_LOCATION.lon}`,
+    label: DEFAULT_WEATHER_LOCATION.label,
+  }
 }
 
 function getDayOfWeek(dateString) {
-  const date = new Date(dateString)
+  const { year, month, day } = parseDateParts(dateString)
+  const date = new Date(year, month - 1, day)
   const dayIndex = date.getDay() 
   return dayIndex === 0 ? 6 : dayIndex - 1
 }
@@ -131,13 +159,30 @@ const buildInitialBooking = () => ({
   isReturningVisitor: false,
   otpVerified: false,
   isAuthenticated: false,
+  authChecked: false,
   pendingPath: '',
   currentBooking: null,
+  currentBookings: [],
   pastBookings: [],
+  cancelledBookings: [],
+  visitors: {
+    name: '',
+    phone: '',
+    email: '',
+    total: 1,
+    elders: 0,
+    differentlyAbled: 0,
+    notes: '',
+  },
   
   temperature: null,
   precipitation: null,
+  weatherLocation: '',
+  weatherSource: '',
   festival: "None",
+  festivalDisplayName: "None",
+  calendarEvent: null,
+  calendarEventType: null,
   publicHoliday: 0,
  
   predictedVisitors: null,
@@ -161,106 +206,217 @@ export const BookingProvider = ({ children }) => {
     }))
   }, [])
 
-  const resetBooking = useCallback(() => setBooking(buildInitialBooking()), [])
+  const resetBooking = useCallback(() => {
+    setBooking((prev) => {
+      const nextBooking = buildInitialBooking()
+
+      return {
+        ...nextBooking,
+        isAuthenticated: prev.isAuthenticated,
+        authChecked: prev.authChecked,
+        visitors: prev.visitors,
+        currentBooking: prev.currentBooking,
+        currentBookings: prev.currentBookings,
+        pastBookings: prev.pastBookings,
+        cancelledBookings: prev.cancelledBookings,
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const response = await fetch('/api/v1/users/me', {
+          credentials: 'include',
+        })
+
+        if (!response.ok) {
+          setBooking((prev) => ({
+            ...prev,
+            isAuthenticated: false,
+            authChecked: true,
+          }))
+          return
+        }
+
+        const result = await response.json()
+        const user = result?.data?.user
+
+        setBooking((prev) => ({
+          ...prev,
+          isAuthenticated: true,
+          authChecked: true,
+          visitors: {
+            ...prev.visitors,
+            name: user ? `${user.firstname || ''} ${user.lastname || ''}`.trim() : prev.visitors.name,
+            phone: user?.phoneno || prev.visitors.phone,
+          },
+        }))
+      } catch (error) {
+        setBooking((prev) => ({
+          ...prev,
+          isAuthenticated: false,
+          authChecked: true,
+        }))
+      }
+    }
+
+    restoreSession()
+  }, [])
 
   const fetchWeatherData = useCallback(async (visitDate) => {
-    const apiKey = "dc6b16519f6a4c6e952183802250312"
-    const lat = 21.233
-    const lon = 72.867
+    const apiKey = WEATHER_API_KEY
+    const location = getWeatherLocationForTemple(booking.temple)
 
     try {
-      const inputDate = new Date(visitDate)
-      const today = new Date()
-      
-      const diffTime = inputDate - today
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      
+      if (!apiKey) {
+        return {
+          ...WEATHER_FALLBACK,
+          weatherLocation: location.label,
+          weatherSource: 'fallback',
+        }
+      }
+
+      const daysAhead = getDaysAhead(visitDate)
+
+      if (daysAhead < 0) {
+        return {
+          temperature: null,
+          precipitation: null,
+          weatherLocation: location.label,
+          weatherSource: 'unavailable',
+          error: 'Weather forecast is only available for today or future dates',
+        }
+      }
+
+      if (daysAhead > 365) {
+        return {
+          temperature: null,
+          precipitation: null,
+          weatherLocation: location.label,
+          weatherSource: 'unavailable',
+          error: 'WeatherAPI future forecast is available only up to 365 days ahead',
+        }
+      }
+
       let endpoint
-      if (diffDays <= 14 && diffDays >= 0) {
-        endpoint = "forecast.json"
-        console.log(`Using forecast API (${diffDays} days ahead)`)
+      const params = new URLSearchParams({
+        key: apiKey,
+        q: location.query,
+        dt: visitDate,
+        aqi: 'no',
+      })
+
+      if (daysAhead <= 14) {
+        endpoint = 'forecast.json'
+        params.set('days', String(Math.max(1, Math.min(daysAhead + 1, 14))))
       } else {
-        endpoint = "future.json"
-        console.log(`Using future API (${diffDays} days ahead)`)
+        endpoint = 'future.json'
       }
       
-      const url = `http://api.weatherapi.com/v1/${endpoint}?key=${apiKey}&q=${lat},${lon}&dt=${visitDate}&aqi=no`
+      const url = `https://api.weatherapi.com/v1/${endpoint}?${params.toString()}`
       
       const res = await fetch(url)
       if (!res.ok) {
-        const txt = await res.text()
-        // console.error("Weather API error")
-        return { temperature: null, precipitation: null }
+        const errorText = await res.text()
+        let errorMessage = 'Weather data not available'
+
+        try {
+          const errorJson = JSON.parse(errorText)
+          errorMessage = errorJson?.error?.message || errorMessage
+        } catch {
+          errorMessage = errorText || errorMessage
+        }
+
+        return {
+          temperature: null,
+          precipitation: null,
+          weatherLocation: location.label,
+          weatherSource: endpoint,
+          error: errorMessage,
+        }
       }
+
       const data = await res.json()
       
       const fd0 = data?.forecast?.forecastday?.[0]
       if (!fd0) {
-        console.error("No forecastday[0] in response:", JSON.stringify(data, null, 2))
-        return { temperature: null, precipitation: null }
+        return {
+          temperature: null,
+          precipitation: null,
+          weatherLocation: location.label,
+          weatherSource: endpoint,
+          error: 'Weather API returned no forecast for the selected date',
+        }
       }
   
       const temp = fd0.day?.avgtemp_c
       const precipitation = fd0.day?.totalprecip_mm
-      return { temperature: temp, precipitation }
+      return {
+        temperature: temp,
+        precipitation,
+        weatherLocation: location.label,
+        weatherSource: endpoint,
+      }
       
     } catch (err) {
-      console.error("Weather get error")
-      return { temperature: null, precipitation: null }
+      return {
+        temperature: null,
+        precipitation: null,
+        weatherLocation: location.label,
+        weatherSource: 'unavailable',
+        error: 'Unable to connect to WeatherAPI',
+      }
     }
-  }, [])
+  }, [booking.temple])
 
   const fetchFestivalData = useCallback(async (visitDate) => {
     try {
-      const [year, month, day] = visitDate.split('-')
-      const dateObj = new Date(visitDate)
-      
-      const navratriInfo = isNavratri(visitDate, year)
-      
-      if (navratriInfo) {
-        return { festival: "Navratri", publicHoliday: 0 }
+      const { year } = parseDateParts(visitDate)
+      const data = await loadCalendarData(year)
+      const eventData = getCalendarEntry(data, visitDate)
+
+      if (!eventData) {
+        return {
+          festival: 'None',
+          festivalDisplayName: 'None',
+          calendarEvent: null,
+          calendarEventType: null,
+          publicHoliday: 0,
+        }
       }
-      
-      const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-      ]
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-      
-      const monthName = monthNames[parseInt(month) - 1]
-      const dayName = dayNames[dateObj.getDay()]
-      
-      const url = `https://jayantur13.github.io/calendar-bharat/calendar/${year}.json`
-      
-      const res = await fetch(url)
-      if (!res.ok) {
-        return { festival: "None", publicHoliday: 0 }
+
+      const fetchedEvent = eventData?.event || ''
+      const fetchedEventType = eventData?.type || ''
+      const matchedFestival = matchFestival(fetchedEvent)
+      const publicHoliday = isPublicHoliday(fetchedEvent, fetchedEventType) ? 1 : 0
+
+      if (matchedFestival) {
+        return {
+          festival: matchedFestival.value,
+          festivalDisplayName: matchedFestival.label,
+          calendarEvent: fetchedEvent,
+          calendarEventType: fetchedEventType,
+          publicHoliday,
+        }
       }
-      
-      const data = await res.json()
-      
-      const monthKey = `${monthName} ${year}`
-      const dateKey = `${monthName} ${parseInt(day)}, ${year}, ${dayName}`
-      
-      if (!data[year] || !data[year][monthKey] || !data[year][monthKey][dateKey]) {
-        return { festival: "None", publicHoliday: 0 }
+
+      return {
+        festival: 'None',
+        festivalDisplayName: 'None',
+        calendarEvent: publicHoliday ? fetchedEvent : null,
+        calendarEventType: publicHoliday ? fetchedEventType : null,
+        publicHoliday,
       }
-      
-      const eventData = data[year][monthKey][dateKey]
-      const fetchedEvent = eventData.event
-      
-      const isPublicHoliday = matchPublicHoliday(fetchedEvent)
-      
-      if (isPublicHoliday) {
-        return { festival: "None", publicHoliday: 1 }
-      }
-      
-      const festival = matchFestival(fetchedEvent)
-      
-      return { festival, publicHoliday: 0 }
       
     } catch (err) {
-      return { festival: "None", publicHoliday: 0 }
+      return {
+        festival: 'None',
+        festivalDisplayName: 'None',
+        calendarEvent: null,
+        calendarEventType: null,
+        publicHoliday: 0,
+      }
     }
   }, [])
 
@@ -277,7 +433,7 @@ export const BookingProvider = ({ children }) => {
         temperature: temperature,
         precipitation: precipitation,
         festival: festival,
-        temple_name: TEMPLE_NAME,
+        temple_name: booking.temple?.name || 'Ambaji',
         day_of_week: dayOfWeek,
         is_weekend: isWeekendFlag,
         festival_flag: festivalFlag,
@@ -314,17 +470,12 @@ export const BookingProvider = ({ children }) => {
         error: 'Unable to connect to prediction service'
       }
     }
-  }, [])
+  }, [booking.temple?.name])
 
   useEffect(() => {
     if (!booking.visitDate) return
 
     const fetchAllData = async () => {
-      
-      const dayOfWeek = getDayOfWeek(booking.visitDate)
-      const isWeekendFlag = isWeekend(booking.visitDate)
-      const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-      
       setBooking(prev => ({
         ...prev,
         predictionLoading: true,
@@ -343,7 +494,12 @@ export const BookingProvider = ({ children }) => {
         ...prev,
         temperature: weatherData.temperature,
         precipitation: weatherData.precipitation,
+        weatherLocation: weatherData.weatherLocation,
+        weatherSource: weatherData.weatherSource,
         festival: festivalData.festival,
+        festivalDisplayName: festivalData.festivalDisplayName,
+        calendarEvent: festivalData.calendarEvent,
+        calendarEventType: festivalData.calendarEventType,
         publicHoliday: festivalData.publicHoliday
       }))
       
@@ -378,7 +534,7 @@ export const BookingProvider = ({ children }) => {
           ...prev,
           predictedVisitors: null,
           predictionLoading: false,
-          predictionError: 'Weather data not available'
+          predictionError: weatherData.error || 'Weather data not available'
         }))
       }
     }

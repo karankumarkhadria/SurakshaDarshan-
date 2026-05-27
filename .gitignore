@@ -1,0 +1,7 @@
+**/node_modules/
+**/.env
+Frontend/dist/
+ML/.venv/
+ML/venv/
+__pycache__/
+*.pyc

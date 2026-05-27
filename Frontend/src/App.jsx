@@ -1,5 +1,7 @@
 import axios from "axios";
-axios.defaults.baseURL = "http://localhost:8000";
+import { API_BASE_URL } from './config/api'
+
+axios.defaults.baseURL = API_BASE_URL;
 axios.defaults.withCredentials = true;
 
 import { BrowserRouter, Routes, Route } from 'react-router-dom'

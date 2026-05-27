@@ -39,7 +39,7 @@ const AdminDashboard = () => {
 
     try {
       const res = await axios.get(
-        `http://localhost:8000/api/v1/admin/get-map/${temple_id}`,
+        `/api/v1/admin/get-map/${temple_id}`,
         { withCredentials: true }
       )
       
@@ -60,7 +60,7 @@ const AdminDashboard = () => {
     e.preventDefault()
     try {
       const res = await axios.post(
-        'http://localhost:8000/api/v1/admin/logout',
+        '/api/v1/admin/logout',
         {},
         { withCredentials: true }
       )
@@ -104,7 +104,7 @@ const AdminDashboard = () => {
 
     try {
       const res = await axios.post(
-        'http://localhost:8000/api/v1/admin/upload-map',
+        '/api/v1/admin/upload-map',
         formData,
         {
           headers: {

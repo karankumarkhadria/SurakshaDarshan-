@@ -8,6 +8,12 @@ import { Booking } from "../models/booking.models.js"
 import mongoose from 'mongoose'
 import SlotAvailability from "../models/slot.models.js"
 
+const cookieOptions = () => ({
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
+})
+
 const generateAccessAndRefereshTokens = async(userId) => {
     try {
         const user = await User.findById(userId)
@@ -52,6 +58,8 @@ const registerUser = AsyncHandler(async (req,res) => {
         password,
     })
 
+    const {accessToken, refreshToken: newRefreshToken} = await generateAccessAndRefereshTokens(user._id)
+
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
     )
@@ -60,8 +68,16 @@ const registerUser = AsyncHandler(async (req,res) => {
         throw new ApiError(500, "Something went wrong while registering the user")
     }
 
-    return res.status(201).json(
-        new ApiResponse(200, createdUser, "User Registered Successfully")
+    return res
+    .status(201)
+    .cookie("accessToken", accessToken, cookieOptions())
+    .cookie("refreshToken", newRefreshToken, cookieOptions())
+    .json(
+        new ApiResponse(
+            201,
+            { user: createdUser, accessToken, newRefreshToken },
+            "User Registered Successfully"
+        )
     )
 })
 
@@ -91,15 +107,10 @@ const loginUser = AsyncHandler(async (req, res) => {
 
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
 
-    const options = {
-        httpOnly: true,
-        secure: true
-    }
-
     return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", newRefreshToken, options)
+    .cookie("accessToken", accessToken, cookieOptions())
+    .cookie("refreshToken", newRefreshToken, cookieOptions())
     .json(
         new ApiResponse(
             200, 
@@ -109,6 +120,12 @@ const loginUser = AsyncHandler(async (req, res) => {
             "User logged In Successfully"
         )
     )
+})
+
+const getCurrentUser = AsyncHandler(async (req, res) => {
+    return res
+        .status(200)
+        .json(new ApiResponse(200, { user: req.user }, "Current user fetched successfully"))
 })
 
 const resetPassword = AsyncHandler(async (req, res) => {
@@ -151,14 +168,9 @@ const logoutUser = AsyncHandler(async(req,res) => {
         }
     )
 
-    const options = {
-        httpOnly: true,
-        secure:true
-    }
-
     return res.status(200)
-    .clearCookie("accessToken",options)
-    .clearCookie("refreshToken",options)
+    .clearCookie("accessToken",cookieOptions())
+    .clearCookie("refreshToken",cookieOptions())
     .json(new ApiResponse (200,{}, "User Logged out successfully!!"))
 })
 
@@ -185,17 +197,12 @@ const refreshAccessToken = AsyncHandler(async(req,res) => {
             throw new ApiError(401, "Refresh Token is expired or used")
         }
 
-        const options = {
-            httpOnly: true,
-            secure: true
-        }
-
         const {accessToken, refreshToken: newRefreshToken} = await generateAccessAndRefereshTokens(user._id)
 
         return res
         .status(200)
-        .cookie("accessToken", accessToken, options)
-        .cookie("refreshToken", newRefreshToken, options)
+        .cookie("accessToken", accessToken, cookieOptions())
+        .cookie("refreshToken", newRefreshToken, cookieOptions())
         .json(
             new ApiResponse(
                 200,
@@ -400,19 +407,15 @@ const getBookingHistory = AsyncHandler(async (req, res) => {
         .sort({ createdAt: -1 })
         .select('-__v');
 
-    if (!bookings || bookings.length === 0) {
-        return res.status(200).json(
-            new ApiResponse(200, [], "No booking history found")
-        );
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const isPastBooking = (booking) => {
+        const bookingDate = new Date(`${booking.date}T00:00:00`)
+        return bookingDate < today
     }
 
-    const currentBooking = bookings.find(b => b.status === "SCHEDULED") || null;
-    
-    const previousBookings = bookings.filter(b => 
-        b._id.toString() !== currentBooking?._id.toString()
-    );
-
-    const transformBooking = (booking) => {
+    const transformBooking = (booking, statusOverride = booking.status) => {
         if (!booking) return null;
         return {
             templeName: booking.temple,
@@ -425,13 +428,31 @@ const getBookingHistory = AsyncHandler(async (req, res) => {
             visitorDetails: booking.visitorDetails || [],
             _id: booking._id,
             id: booking.id,
-            status: booking.status
+            status: statusOverride
         };
     };
 
+    const currentBookings = bookings.filter(
+        (booking) => booking.status === "SCHEDULED" && !isPastBooking(booking)
+    );
+
+    const previousBookings = bookings.filter(
+        (booking) =>
+            booking.status === "COMPLETED" ||
+            (booking.status === "SCHEDULED" && isPastBooking(booking))
+    );
+
+    const cancelledBookings = bookings.filter(
+        (booking) => booking.status === "CANCELLED"
+    );
+
     const responseData = {
-        currentBooking: transformBooking(currentBooking),
-        previousBookings: previousBookings.map(transformBooking)
+        currentBookings: currentBookings.map(transformBooking),
+        currentBooking: transformBooking(currentBookings[0] || null),
+        previousBookings: previousBookings.map((booking) =>
+            transformBooking(booking, "COMPLETED")
+        ),
+        cancelledBookings: cancelledBookings.map(transformBooking)
     };
 
     return res.status(200).json({
@@ -612,6 +633,7 @@ const cancelBooking = AsyncHandler(async (req, res) => {
 export {
     registerUser,
     loginUser,
+    getCurrentUser,
     logoutUser,
     refreshAccessToken,
     resetPassword,

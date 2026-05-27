@@ -50,7 +50,7 @@ const UserAccess = () => {
     
     try {
       const res = await axios.post(
-        'http://localhost:8000/api/v1/users/login', loginData,
+        '/api/v1/users/login', loginData,
         { headers: { 'Content-Type': 'application/json' } }
       );
       
@@ -71,7 +71,7 @@ const UserAccess = () => {
       visitors: {
         ...booking.visitors,
         name: loginContact,
-        contact: loginContact,
+        phone: loginContact,
       },
     })
     const nextPath = booking.pendingPath || '/details'
@@ -132,7 +132,7 @@ const UserAccess = () => {
 
     try {
       const res = await axios.post(
-        'http://localhost:8000/api/v1/users/register', userInfo,
+        '/api/v1/users/register', userInfo,
         { headers: { 'Content-Type': 'application/json' } }
       );
 
@@ -144,7 +144,7 @@ const UserAccess = () => {
           visitors: {
             ...booking.visitors,
             name: `${firstname} ${lastname}`,
-            contact: phoneno,
+            phone: phoneno,
           },
         })
         
@@ -188,7 +188,7 @@ const UserAccess = () => {
 
     try {
       const res = await axios.post(
-        'http://localhost:8000/api/v1/users/reset-password', userInfo,
+        '/api/v1/users/reset-password', userInfo,
         { headers: { 'Content-Type': 'application/json' } }
       );
 

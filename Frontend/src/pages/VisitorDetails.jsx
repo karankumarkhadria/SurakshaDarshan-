@@ -112,7 +112,7 @@ const VisitorDetails = () => {
 
     try {
       const res = await axios.post(
-        "http://localhost:8000/api/v1/bookings/booking",
+        "/api/v1/bookings/booking",
         bookingInfo,
         { headers: { 'content-Type': 'application/json' } , withCredentials: true }
       )

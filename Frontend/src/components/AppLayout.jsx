@@ -27,10 +27,58 @@ const AppLayout = ({ children }) => {
   const [selectedHistory, setSelectedHistory] = useState(
     booking.pastBookings?.[0] ?? null,
   )
-  const [currentBooking,setCurrentBooking]= useState(null);
-    const [previousBookings, setPreviousBookings]=useState([]);
   
   const t = useTranslation()
+
+  const transformBookingRecord = (record) => ({
+    id: record._id || record.id,
+    temple: record.templeName || record.temple || 'Unknown Temple',
+    templeName: record.templeName || record.temple || 'Unknown Temple',
+    date: record.visitDate || record.date || '',
+    visitDate: record.visitDate || record.date || '',
+    slot: record.visitSlot || record.slot || '',
+    visitSlot: record.visitSlot || record.slot || '',
+    status: record.status || 'COMPLETED',
+    _id: record._id,
+    visitors: {
+      total: record.devotes || record.visitors?.total || 1,
+      elders: record.elders || record.visitors?.elders || 0,
+      differentlyAbled: record.differentlyAbled || record.visitors?.differentlyAbled || 0,
+    },
+  })
+
+  const applyBookingHistory = (dataField) => {
+    const currentBookingsData = Array.isArray(dataField?.currentBookings)
+      ? dataField.currentBookings
+      : dataField?.currentBooking
+        ? [dataField.currentBooking]
+        : Array.isArray(dataField)
+          ? dataField.filter((record) => record.status === 'SCHEDULED')
+          : []
+
+    const previousBookingsData = Array.isArray(dataField?.previousBookings)
+      ? dataField.previousBookings
+      : Array.isArray(dataField)
+        ? dataField.filter((record) => record.status === 'COMPLETED')
+        : []
+
+    const cancelledBookingsData = Array.isArray(dataField?.cancelledBookings)
+      ? dataField.cancelledBookings
+      : Array.isArray(dataField)
+        ? dataField.filter((record) => record.status === 'CANCELLED')
+        : []
+
+    const currentBookings = currentBookingsData.map(transformBookingRecord)
+    const pastBookings = previousBookingsData.map(transformBookingRecord)
+    const cancelledBookings = cancelledBookingsData.map(transformBookingRecord)
+
+    updateBooking({
+      currentBookings,
+      currentBooking: currentBookings[0] || null,
+      pastBookings,
+      cancelledBookings,
+    })
+  }
 
   useEffect(() => {
     setBookingsOpen(false)
@@ -64,7 +112,7 @@ const handleCancelConfirm = async () => {
 
   try {
     const response = await axios.post(
-      'http://localhost:8000/api/v1/bookings/cancel-booking',
+      '/api/v1/bookings/cancel-booking',
       { bookingId: cancellingBooking._id },
       { 
         withCredentials: true,
@@ -84,46 +132,12 @@ const handleCancelConfirm = async () => {
       setCancellingBooking(null);
       try {
         const res = await axios.get(
-          "http://localhost:8000/api/v1/bookings/booking-history",
+          "/api/v1/bookings/booking-history",
           { withCredentials: true }
         );
 
         if (res.data.data) {
-          const dataField = res.data.data;
-          let currentBookingData = null;
-          let previousBookingsData = [];
-
-          if (dataField.currentBooking !== undefined) {
-            currentBookingData = dataField.currentBooking;
-            previousBookingsData = dataField.previousBookings || [];
-          } else if (Array.isArray(dataField)) {
-            currentBookingData = dataField.find(b => b.status === "SCHEDULED") || null;
-            previousBookingsData = dataField.filter(b => b.status !== "SCHEDULED");
-          }
-
-          const transformedPreviousBookings = Array.isArray(previousBookingsData) 
-            ? previousBookingsData.map(booking => ({
-                id: booking._id || booking.id,
-                temple: booking.templeName || booking.temple || 'Unknown Temple',
-                date: booking.visitDate || booking.date || '',
-                slot: booking.visitSlot || booking.slot || '',
-                status: booking.status || 'Completed',
-                _id: booking._id,
-                visitors: {
-                  total: booking.devotes || booking.visitors?.total || 1,
-                  elders: booking.elders || booking.visitors?.elders || 0,
-                  differentlyAbled: booking.differentlyAbled || booking.visitors?.differentlyAbled || 0,
-                }
-              }))
-            : [];
-
-          updateBooking({
-            currentBooking: currentBookingData,
-            pastBookings: transformedPreviousBookings,
-          });
-
-          setCurrentBooking(currentBookingData);
-          setPreviousBookings(transformedPreviousBookings);
+          applyBookingHistory(res.data.data);
         }
       } catch (fetchError) {
         alert("Booking cancelled but failed to refresh list. Please reload the page.");
@@ -150,7 +164,7 @@ const handleCancelConfirm = async () => {
   const handleLogout = async() => {
        try{
         await axios.post(
-          "http://localhost:8000/api/v1/users/logout",
+          "/api/v1/users/logout",
           {},
           {withCredentials: true}
         );
@@ -158,6 +172,11 @@ const handleCancelConfirm = async () => {
         alert('User logged out successfully!!')
         updateBooking({
       isAuthenticated: false,
+      authChecked: true,
+      currentBooking: null,
+      currentBookings: [],
+      pastBookings: [],
+      cancelledBookings: [],
       otpVerified: false,
       visitors: {
         name: '',
@@ -188,53 +207,13 @@ const handleCancelConfirm = async () => {
     const fetchBookings= async()=>{
       try{
         const res= await axios.get(
-          "http://localhost:8000/api/v1/bookings/booking-history",{
+          "/api/v1/bookings/booking-history",{
             withCredentials:true
           })
 
-       let currentBookingData = null;
-      let previousBookingsData = [];
-         if (res.data.data) {
-          const dataField = res.data.data;
-
-           if (dataField.currentBooking !== undefined) {
-          currentBookingData = dataField.currentBooking;
-          previousBookingsData = dataField.previousBookings || [];
-        } else if (Array.isArray(dataField)) {
-          currentBookingData = dataField.find(b => b.status === "SCHEDULED") || null;
-          previousBookingsData = dataField.filter(b => b.status !== "SCHEDULED");
-        }
-
-
+       if (res.data.data) {
+          applyBookingHistory(res.data.data);
         } 
-    
-
-       const transformedPreviousBookings = Array.isArray(previousBookingsData) 
-        ? previousBookingsData.map(booking => ({
-            id: booking._id || booking.id,
-            temple: booking.templeName || booking.temple || 'Unknown Temple',
-            date: booking.visitDate || booking.date || '',
-            slot: booking.visitSlot || booking.slot || '',
-            status: booking.status || 'Completed',
-            _id: booking._id,
-            visitors: {
-              total: booking.devotes || booking.visitors?.total || 1,
-              elders: booking.elders || booking.visitors?.elders || 0,
-              differentlyAbled: booking.differentlyAbled || booking.visitors?.differentlyAbled || 0,
-            }
-          }))
-        : [];
-
-
-         updateBooking({
-        currentBooking: currentBookingData,
-        pastBookings: transformedPreviousBookings,
-      });
-        
-
-
-       setCurrentBooking(currentBookingData);
-      setPreviousBookings(transformedPreviousBookings);
 
       }catch(err){
        console.error(err.response?.data || err.message);
@@ -443,10 +422,10 @@ const handleCancelConfirm = async () => {
                   {t('nav.close', 'Close')} 
                 </button>
               </div>
-              {booking.currentBooking ? (
+              {booking.currentBookings?.length > 0 ? (
   <div className="mt-3">
     <div className="rounded-xl bg-orange-50 p-4 shadow-sm">
-      <h3 className="font-bold text-lg">{booking.currentBooking.templeName}</h3>
+      <h3 className="font-bold text-lg">{booking.currentBooking?.temple}</h3>
 
       <p>{booking.currentBooking.visitDate} • {booking.currentBooking.visitSlot}</p>
 
@@ -454,7 +433,7 @@ const handleCancelConfirm = async () => {
         Parking: {booking.currentBooking.parking}
       </p>
 
-     {!showCancelOtp ? (
+     {!showCancelOtp || cancellingBooking?._id !== booking.currentBooking?._id ? (
                       <button 
                         onClick={() => handleCancelRequest(booking.currentBooking)}
                         className="mt-3 rounded-full border-2 border-red-500 px-4 py-2 text-sm font-semibold text-red-500 transition hover:bg-red-500 hover:text-white"
@@ -497,6 +476,40 @@ const handleCancelConfirm = async () => {
                       </div>
                     )}
                   </div>
+                  {booking.currentBookings.slice(1).map((record) => (
+                    <div key={record._id || record.id} className="mt-3 rounded-xl bg-orange-50 p-4 shadow-sm">
+                      <h3 className="font-bold text-lg">{record.temple}</h3>
+                      <p>{record.date} • {record.slot}</p>
+                      {!showCancelOtp || cancellingBooking?._id !== record._id ? (
+                        <button
+                          onClick={() => handleCancelRequest(record)}
+                          className="mt-3 rounded-full border-2 border-red-500 px-4 py-2 text-sm font-semibold text-red-500 transition hover:bg-red-500 hover:text-white"
+                        >
+                          Cancel Booking
+                        </button>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <div className="rounded-xl border-2 border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                            Your OTP: <span className="font-bold text-lg">{generatedCancelOtp}</span>
+                          </div>
+                          <input
+                            type="text"
+                            value={cancelOtp}
+                            onChange={(e) => setCancelOtp(e.target.value)}
+                            maxLength="6"
+                            placeholder="123456"
+                            className="w-full rounded-lg border-2 border-gray-300 px-3 py-2 text-center text-lg tracking-widest focus:border-brand-orange focus:outline-none"
+                          />
+                          <button
+                            onClick={handleCancelConfirm}
+                            className="w-full rounded-full bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-600"
+                          >
+                            Confirm Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <p className="mt-3 rounded-2xl border border-dashed border-brand-dusk/15 p-4 text-brand-slate/60">
@@ -524,8 +537,8 @@ const handleCancelConfirm = async () => {
         <p className="text-xs">{record.date}</p>
         <p className="text-xs">{record.slot}</p>
         <span className={`text-xs px-2 py-1 rounded-full ${
-          record.status === 'Completed' ? 'bg-green-100 text-green-700' :
-          record.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
+          record.status === 'COMPLETED' || record.status === 'Completed' ? 'bg-green-100 text-green-700' :
+          record.status === 'CANCELLED' || record.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
           'bg-gray-100 text-gray-700'
         }`}>
           {record.status}
@@ -539,6 +552,33 @@ const handleCancelConfirm = async () => {
   )}
 </div>
 
+
+                <div className="mt-5">
+                  <p className="text-xs uppercase tracking-wide text-brand-slate/70">
+                    Cancelled bookings
+                  </p>
+                  <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                    {booking.cancelledBookings && booking.cancelledBookings.length > 0 ? (
+                      booking.cancelledBookings.map((record) => (
+                        <div
+                          key={record.id || record._id}
+                          className="w-full rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-left text-red-700"
+                        >
+                          <p className="text-sm font-semibold">{record.temple}</p>
+                          <p className="text-xs">{record.date}</p>
+                          <p className="text-xs">{record.slot}</p>
+                          <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">
+                            CANCELLED
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rounded-2xl border border-dashed border-brand-dusk/15 p-4 text-center text-brand-slate/60">
+                        No cancelled bookings
+                      </p>
+                    )}
+                  </div>
+                </div>
 
 
                 {activeHistory && (

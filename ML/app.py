@@ -5,20 +5,38 @@ from pydantic import BaseModel
 import pandas as pd
 import numpy as np
 import joblib
-import psycopg2
+import os
+from pathlib import Path
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
+BASE_DIR = Path(__file__).resolve().parent
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass
 
 # ---------------- APP SETUP ---------------- #
 
 app = FastAPI(title="Visitor Prediction API")
 
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGIN",
+        "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,10 +48,10 @@ def home():
 
 # ---------------- LOAD MODELS & DATA ---------------- #
 
-blended_model = joblib.load("models/blended_model.pkl")
-scaler = joblib.load("models/scaler.pkl")
+blended_model = joblib.load(BASE_DIR / "models" / "blended_model.pkl")
+scaler = joblib.load(BASE_DIR / "models" / "scaler.pkl")
 
-df_hist = pd.read_csv("test_clean_encoded_2.csv")
+df_hist = pd.read_csv(BASE_DIR / "test_clean_encoded_2.csv")
 df_hist["date"] = pd.to_datetime(df_hist["date"])
 
 festival_encoding = {
@@ -42,18 +60,23 @@ festival_encoding = {
     "Holi": 2,
     "Janmashtami": 3,
     "Makar Sakranti": 4,
+    "Makar Sankranti": 4,
+    "Makara Sankranti": 4,
+    "Pongal": 4,
     "MahaShivratri": 5,
+    "Maha Shivratri": 5,
+    "Maha Shivaratri": 5,
     "Navratri": 6,
 }
 
 # ---------------- DATABASE CONFIG ---------------- #
 
 DB_CONFIG = {
-    "host": "localhost",
-    "database": "suraksha_darshan",
-    "user": "postgres",
-    "password": "1234",
-    "port": 5432,
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "database": os.getenv("POSTGRES_DB", "suraksha_darshan"),
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD", ""),
+    "port": int(os.getenv("POSTGRES_PORT", "5432")),
 }
 
 # ---------------- INPUT SCHEMA ---------------- #
@@ -140,6 +163,10 @@ def feature_engineer(user_row: pd.DataFrame):
 
 def save_to_database(final_row: pd.DataFrame):
     print(">>> SAVE_TO_DATABASE CALLED")
+
+    if psycopg2 is None:
+        print("DB SKIPPED: psycopg2 is not installed")
+        return
 
     try:
         conn = psycopg2.connect(**DB_CONFIG)

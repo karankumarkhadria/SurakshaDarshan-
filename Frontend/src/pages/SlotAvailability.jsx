@@ -4,26 +4,45 @@ import { useBooking } from '../context/BookingContext'
 import useTranslation from '../hooks/useTranslation'
 import axios from 'axios'
 
+const formatDateInput = (date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-')
+
+const getDateOffsetInput = (days) => {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return formatDateInput(date)
+}
+
 const SlotAvailability = () => {
   const navigate = useNavigate()
   const { booking, updateBooking } = useBooking()
   const t = useTranslation()
   const [visitDate, setVisitDate] = useState(
-    booking.visitDate || new Date().toISOString().split('T')[0]
+    booking.visitDate || formatDateInput(new Date())
   )
   const [selectedSlot, setSelectedSlot] = useState(booking.visitSlot || '')
   const [slotsData, setSlotsData] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
 
   const TEMPLE_CAP = 60000
+  const FALLBACK_SLOT_CAPACITY = 500
   const isKashiTemple = booking.temple?.name === "Shri Kashi Vishwanath Temple"
+  const hasCalendarEvent = booking.festival !== "None" || booking.publicHoliday === 1
+  const calendarEventLabel = booking.publicHoliday === 1 ? 'Holiday' : 'Festival'
+  const calendarEventName =
+    booking.publicHoliday === 1
+      ? booking.calendarEvent
+      : booking.festivalDisplayName || booking.festival
 
   const calculatedSlotCapacity = useMemo(() => {
     if (isKashiTemple) {
       return 2
     }
     if (!booking.predictedVisitors) {
-      return null
+      return FALLBACK_SLOT_CAPACITY
     }
 
     const predictedVisitors = booking.predictedVisitors
@@ -44,7 +63,7 @@ const SlotAvailability = () => {
     setLoadingSlots(true)
     try {
       const response = await axios.get(
-        'http://localhost:8000/api/v1/bookings/slot-availability',
+        '/api/v1/bookings/slot-availability',
         {
           params: {
             temple: booking.temple.name,
@@ -96,7 +115,7 @@ const SlotAvailability = () => {
 
     try {
       const response = await axios.post(
-        'http://localhost:8000/api/v1/bookings/initialize-slots',
+        '/api/v1/bookings/initialize-slots',
         {
           temple: booking.temple.name,
           date: visitDate,
@@ -188,7 +207,8 @@ const SlotAvailability = () => {
             type="date"
             value={visitDate}
             onChange={handleDateChange}
-            min={new Date().toISOString().split('T')[0]}
+            min={formatDateInput(new Date())}
+            max={getDateOffsetInput(365)}
             className="mt-2 rounded-2xl border border-brand-dusk/15 bg-white/80 px-4 py-3 focus:border-brand-saffron focus:outline-none"
           />
         </label>
@@ -246,15 +266,20 @@ const SlotAvailability = () => {
                       <div className="rounded-lg bg-white/50 p-3">
                         <p className="text-xs text-brand-dusk/60 mb-1">Weather</p>
                         <p className="text-sm font-medium text-brand-dusk">
-                          {booking.temperature}°C, {booking.precipitation}mm rain
+                          {booking.temperature}C, {booking.precipitation}mm rain
                         </p>
+                        {booking.weatherLocation && (
+                          <p className="mt-1 text-xs text-brand-dusk/50">
+                            {booking.weatherLocation}
+                          </p>
+                        )}
                       </div>
 
-                      {booking.festival !== "None" && (
+                      {hasCalendarEvent && calendarEventName && (
                         <div className="rounded-lg bg-brand-orange/10 p-3">
-                          <p className="text-xs text-brand-dusk/60 mb-1">Festival</p>
+                          <p className="text-xs text-brand-dusk/60 mb-1">{calendarEventLabel}</p>
                           <p className="text-sm font-semibold text-brand-orange">
-                            {booking.festival}
+                            {calendarEventName}
                             {booking.predictionDetails?.is_spike_festival && (
                               <span className="ml-2 text-xs bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">
                                 High Traffic

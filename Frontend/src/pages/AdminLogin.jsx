@@ -23,7 +23,7 @@ const AdminLogin = () => {
     try {
       
       const res = await axios.post(
-        'http://localhost:8000/api/v1/admin/login',
+        '/api/v1/admin/login',
         loginData,
         { 
           headers: { 'Content-Type': 'application/json' },

@@ -415,8 +415,9 @@ const getBookingHistory = AsyncHandler(async (req, res) => {
         return bookingDate < today
     }
 
-    const transformBooking = (booking, statusOverride = booking.status) => {
+    const transformBooking = (booking, statusOverride = null) => {
         if (!booking) return null;
+        const status = statusOverride || booking.status;
         return {
             templeName: booking.temple,
             visitDate: booking.date,
@@ -428,7 +429,7 @@ const getBookingHistory = AsyncHandler(async (req, res) => {
             visitorDetails: booking.visitorDetails || [],
             _id: booking._id,
             id: booking.id,
-            status: statusOverride
+            status
         };
     };
 
@@ -447,12 +448,12 @@ const getBookingHistory = AsyncHandler(async (req, res) => {
     );
 
     const responseData = {
-        currentBookings: currentBookings.map(transformBooking),
+        currentBookings: currentBookings.map((booking) => transformBooking(booking)),
         currentBooking: transformBooking(currentBookings[0] || null),
         previousBookings: previousBookings.map((booking) =>
             transformBooking(booking, "COMPLETED")
         ),
-        cancelledBookings: cancelledBookings.map(transformBooking)
+        cancelledBookings: cancelledBookings.map((booking) => transformBooking(booking))
     };
 
     return res.status(200).json({

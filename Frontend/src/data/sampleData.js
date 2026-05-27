@@ -33,7 +33,7 @@ export const temples = [
     origin:
       'Over the centuries, the temple was attacked by various invaders, including rulers from the Delhi Sultanate, the Portuguese, and Mughal emperor Aurangzeb. The current temple was reconstructed post-Indian independence, with Sardar Vallabhbhai Patel initiating the project and President Rajendra Prasad performing the consecration in 1951.',
     image:
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Somanath_mandir_%28cropped%29.jpg/1100px-Somanath_mandir_%28cropped%29.jpg',
+      'https://upload.wikimedia.org/wikipedia/commons/1/10/Somanath_mandir_%28cropped%29.jpg',
   },
   {
     id: 'dwarkadish',
@@ -257,5 +257,4 @@ export const parkingZones = [
     amenities: ['Covered', 'Wheelchair', 'Priority exit'],
   },
 ]
-
 

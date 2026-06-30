@@ -13,6 +13,8 @@ const BookingContext = createContext(null)
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const WEATHER_FALLBACK = { temperature: 28, precipitation: 0 }
 const DEFAULT_WEATHER_LOCATION = { lat: 21.233, lon: 72.867, label: 'Surat, Gujarat' }
+const ML_REQUEST_TIMEOUT_MS = 45000
+const ML_RETRY_DELAYS_MS = [0, 10000, 20000, 30000]
 
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -35,6 +37,24 @@ const publicHolidayKeywords = [
 ]
 
 const calendarCache = new Map()
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
 
 function padDatePart(value) {
   return String(value).padStart(2, '0')
@@ -421,54 +441,77 @@ export const BookingProvider = ({ children }) => {
   }, [])
 
   const fetchPrediction = useCallback(async (visitDate, temperature, precipitation, festival, publicHoliday) => {
-    // console.log("Calling ML API")
-    
-    try {
-      const dayOfWeek = getDayOfWeek(visitDate)
-      const isWeekendFlag = isWeekend(visitDate)
-      const festivalFlag = festival !== "None" ? 1 : 0
-      
-      const payload = {
-        date: visitDate,
-        temperature: temperature,
-        precipitation: precipitation,
-        festival: festival,
-        temple_name: booking.temple?.name || 'Ambaji',
-        day_of_week: dayOfWeek,
-        is_weekend: isWeekendFlag,
-        festival_flag: festivalFlag,
-        public_holiday: publicHoliday
+    const dayOfWeek = getDayOfWeek(visitDate)
+    const isWeekendFlag = isWeekend(visitDate)
+    const festivalFlag = festival !== "None" ? 1 : 0
+
+    const payload = {
+      date: visitDate,
+      temperature: temperature,
+      precipitation: precipitation,
+      festival: festival,
+      temple_name: booking.temple?.name || 'Ambaji',
+      day_of_week: dayOfWeek,
+      is_weekend: isWeekendFlag,
+      festival_flag: festivalFlag,
+      public_holiday: publicHoliday
+    }
+
+    let lastError = 'Prediction service is still waking up. Please try again in a moment.'
+
+    for (let attempt = 0; attempt < ML_RETRY_DELAYS_MS.length; attempt += 1) {
+      const retryDelay = ML_RETRY_DELAYS_MS[attempt]
+
+      if (retryDelay > 0) {
+        await wait(retryDelay)
       }
-      
-      const response = await fetch(`${ML_API_URL}/predict`, {
+
+      try {
+        if (attempt === 0) {
+          fetch(`${ML_API_URL}/health`).catch(() => {})
+        }
+
+        const response = await fetchWithTimeout(`${ML_API_URL}/predict`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload)
-      })
+        }, ML_REQUEST_TIMEOUT_MS)
 
-      if (!response.ok) {
-        const error = await response.json()
-        return { 
-          success: false, 
-          error: error.error || 'Prediction failed' 
+        let result = null
+        try {
+          result = await response.json()
+        } catch {
+          result = null
         }
-      }
 
-      const result = await response.json()
-      
-      return {
-        success: true,
-        predictedVisitors: Math.floor(1.1 * result.predicted_visitors),
-        details: result
-      }
+        if (!response.ok) {
+          lastError = result?.error || result?.detail || 'Prediction failed'
+          continue
+        }
 
-    } catch (err) {
-      return {
-        success: false,
-        error: 'Unable to connect to prediction service'
+        if (result?.status === 'failed' || typeof result?.predicted_visitors !== 'number') {
+          lastError = result?.error || 'Prediction service returned an invalid response'
+          continue
+        }
+
+        return {
+          success: true,
+          predictedVisitors: Math.floor(1.1 * result.predicted_visitors),
+          details: result
+        }
+      } catch (err) {
+        lastError =
+          err?.name === 'AbortError'
+            ? 'Prediction service is taking too long to wake up'
+            : 'Unable to connect to prediction service'
       }
+    }
+
+    return {
+      success: false,
+      error: lastError
     }
   }, [booking.temple?.name])
 

@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   useEffect,
 } from 'react'
@@ -14,6 +15,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 const WEATHER_FALLBACK = { temperature: 28, precipitation: 0 }
 const DEFAULT_WEATHER_LOCATION = { lat: 21.233, lon: 72.867, label: 'Surat, Gujarat' }
 const ML_REQUEST_TIMEOUT_MS = 45000
+const ML_WARMUP_TIMEOUT_MS = 60000
 const ML_RETRY_DELAYS_MS = [0, 10000, 20000, 30000]
 
 const monthNames = [
@@ -214,6 +216,7 @@ const buildInitialBooking = () => ({
 export const BookingProvider = ({ children }) => {
   const [booking, setBooking] = useState(buildInitialBooking)
   const [language, setLanguage] = useState('en')
+  const hasWarmedMlRef = useRef(false)
 
   const updateBooking = useCallback((partial) => {
     setBooking((prev) => ({
@@ -241,6 +244,14 @@ export const BookingProvider = ({ children }) => {
         cancelledBookings: prev.cancelledBookings,
       }
     })
+  }, [])
+
+  useEffect(() => {
+    if (hasWarmedMlRef.current) return
+    hasWarmedMlRef.current = true
+
+    fetchWithTimeout(`${ML_API_URL}/health`, { method: 'GET' }, ML_WARMUP_TIMEOUT_MS)
+      .catch(() => {})
   }, [])
 
   useEffect(() => {

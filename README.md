@@ -1,31 +1,30 @@
 # SurakshaDarshan - Temple Crowd Management System
 
-SurakshaDarshan is a full-stack temple crowd management platform built for the Smart India Hackathon. The application helps devotees search temples, view crowd predictions, reserve darshan slots, manage bookings, and generate QR-based passes. It also connects to a separate FastAPI ML service that predicts expected temple visitors using weather, festival, date, and historical crowd data.
+SurakshaDarshan is a full-stack temple crowd management platform built for online darshan planning. Users can search temples, view predicted crowd levels, reserve darshan slots, manage bookings, and generate QR-based booking passes. The project also includes a FastAPI-based ML service for visitor prediction using weather, festival, date, and historical crowd data.
 
 ## Live Links
 
 - Website: [https://suraksha-darshan.onrender.com](https://suraksha-darshan.onrender.com)
 - ML API Health Check: [https://suraksha-darshan-ml.onrender.com/health](https://suraksha-darshan-ml.onrender.com/health)
-- Repository: [https://github.com/karankumarkhadria/SurakshaDarshan-](https://github.com/karankumarkhadria/SurakshaDarshan-)
+- GitHub Repository: [https://github.com/karankumarkhadria/SurakshaDarshan-](https://github.com/karankumarkhadria/SurakshaDarshan-)
 
-Note: The project is deployed on Render free instances, so the first request can take some time if the services were sleeping. The frontend includes a warm-up request and retry handling for the ML service.
+## Features
 
-## Key Features
-
-- Temple discovery with search, state filter, district filter, temple images, location, tags, history, and crowd status.
-- AI-powered crowd prediction using date, weather, festival, public holiday, weekend, and historical visitor data.
-- Online darshan slot booking with 15 daily time slots per temple.
+- Temple search with state and district filters.
+- Temple detail pages with location, images, tags, history, and crowd status.
+- AI-based visitor prediction using weather, festival, date, weekend, and historical data.
+- Darshan slot booking with 15 daily time slots per temple.
 - Live seat availability with booked-seat and available-seat updates.
-- Transaction-safe booking and cancellation using MongoDB sessions.
-- User login/signup with JWT authentication and bcrypt password hashing.
-- Group booking flow with visitor details, Aadhaar validation, and visitor categories.
-- QR-based booking pass generation with download and print support.
-- Booking history separated into current, previous, and cancelled bookings.
-- Parking availability flow with zones, vehicle types, availability status, and slot layout view.
-- Temple map page with directions support.
-- Admin panel for temple map upload and temple operations.
-- Multilingual UI support.
-- Render deployment with environment-based configuration for frontend, backend, and ML API.
+- Booking creation and cancellation with MongoDB transaction handling.
+- User authentication using JWT and bcrypt.
+- Group booking with visitor details, Aadhaar validation, and visitor categories.
+- QR-based booking pass generation with download and print options.
+- Booking history for current, previous, and cancelled bookings.
+- Parking availability flow with parking zones and slot layout view.
+- Temple map and direction support.
+- Admin login and temple map upload.
+- Multilingual user interface.
+- Production deployment on Render with MongoDB Atlas.
 
 ## Tech Stack
 
@@ -68,7 +67,7 @@ Note: The project is deployed on Render free instances, so the first request can
 - WeatherAPI
 - Cloudinary
 
-## Project Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -87,61 +86,59 @@ flowchart LR
 
 ```text
 SurakshaDarshan__/
-├── Backend/
-│   ├── src/
-│   │   ├── controllers/
-│   │   ├── db/
-│   │   ├── middlewares/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── scripts/
-│   │   └── utils/
-│   ├── package.json
-│   └── .env.example
-├── Frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── config/
-│   │   ├── context/
-│   │   ├── data/
-│   │   ├── hooks/
-│   │   ├── i18n/
-│   │   └── pages/
-│   ├── package.json
-│   └── .env.example
-├── ML/
-│   ├── models/
-│   ├── app.py
-│   ├── requirements-api.txt
-│   └── .env.example
-└── README.md
+|-- Backend/
+|   |-- src/
+|   |   |-- controllers/
+|   |   |-- db/
+|   |   |-- middlewares/
+|   |   |-- models/
+|   |   |-- routes/
+|   |   |-- scripts/
+|   |   `-- utils/
+|   |-- package.json
+|   `-- .env.example
+|-- Frontend/
+|   |-- src/
+|   |   |-- components/
+|   |   |-- config/
+|   |   |-- context/
+|   |   |-- data/
+|   |   |-- hooks/
+|   |   |-- i18n/
+|   |   `-- pages/
+|   |-- package.json
+|   `-- .env.example
+|-- ML/
+|   |-- models/
+|   |-- app.py
+|   |-- requirements-api.txt
+|   `-- .env.example
+`-- README.md
 ```
 
 ## How It Works
 
-1. The user selects a temple from the React frontend.
+1. A user selects a temple from the React frontend.
 2. The user chooses a visit date on the slot page.
-3. The frontend fetches weather and festival/calendar information for that date.
+3. The frontend fetches weather and festival information for the selected date.
 4. The frontend sends prediction input to the FastAPI ML service.
 5. The ML service returns the expected visitor count.
-6. The frontend uses the predicted crowd to show slot capacity and availability.
+6. The frontend uses the predicted crowd to calculate slot capacity.
 7. The user selects a darshan slot and enters visitor details.
-8. The backend stores the booking and updates slot availability inside a MongoDB transaction.
-9. The confirmation page generates a QR pass for the booking.
-10. The user can later view current, previous, and cancelled bookings.
+8. The backend creates the booking and updates slot availability in MongoDB.
+9. The confirmation page generates a QR-based booking pass.
+10. The user can view current, previous, and cancelled bookings from booking history.
 
 ## Local Setup
 
 ### Prerequisites
-
-Install these before running the project:
 
 - Node.js 18 or later
 - npm 9 or later
 - Python 3.11 or later
 - MongoDB Atlas account or local MongoDB
 - WeatherAPI key
-- Cloudinary account, only required for admin map upload
+- Cloudinary account for admin map upload
 
 ## 1. Clone the Repository
 
@@ -150,7 +147,7 @@ git clone https://github.com/karankumarkhadria/SurakshaDarshan-.git
 cd SurakshaDarshan-
 ```
 
-If your folder name is different, open the folder that contains `Frontend`, `Backend`, and `ML`.
+If the folder name is different, open the folder that contains `Frontend`, `Backend`, and `ML`.
 
 ## 2. Backend Setup
 
@@ -161,13 +158,13 @@ cd Backend
 npm install
 ```
 
-Create a `.env` file inside `Backend` by copying `.env.example`.
+Create a `.env` file inside `Backend`:
 
 ```bash
 copy .env.example .env
 ```
 
-Fill these important values:
+Add the required values:
 
 ```env
 PORT=8000
@@ -192,13 +189,13 @@ Start the backend:
 npm run dev
 ```
 
-Backend will run on:
+Backend URL:
 
 ```text
 http://localhost:8000
 ```
 
-Health check:
+Backend health check:
 
 ```text
 http://localhost:8000/api/v1/health
@@ -222,7 +219,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements-api.txt
 ```
 
-Create a `.env` file inside `ML` if needed.
+Create a `.env` file inside `ML`:
 
 ```bash
 copy .env.example .env
@@ -240,13 +237,13 @@ Start the ML API:
 python -m uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-ML service will run on:
+ML API URL:
 
 ```text
 http://localhost:8001
 ```
 
-Health check:
+ML health check:
 
 ```text
 http://localhost:8001/health
@@ -270,13 +267,13 @@ cd Frontend
 npm install
 ```
 
-Create a `.env` file inside `Frontend` by copying `.env.example`.
+Create a `.env` file inside `Frontend`:
 
 ```bash
 copy .env.example .env
 ```
 
-Fill these values:
+Add the required values:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000
@@ -290,21 +287,19 @@ Start the frontend:
 npm run dev
 ```
 
-Frontend will run on:
+Frontend URL:
 
 ```text
 http://localhost:5173
 ```
 
-## Recommended Local Start Order
+## Recommended Start Order
 
-Run the services in this order:
+1. Start the ML service on port `8001`.
+2. Start the backend on port `8000`.
+3. Start the frontend on port `5173`.
 
-1. ML service on port `8001`
-2. Backend on port `8000`
-3. Frontend on port `5173`
-
-## Important API Routes
+## API Routes
 
 ### User APIs
 
@@ -342,7 +337,7 @@ Run the services in this order:
 | GET | `/health` | ML health check |
 | POST | `/predict` | Predict expected visitors |
 
-## Sample ML Prediction Payload
+## Sample ML Prediction Request
 
 ```json
 {
@@ -368,14 +363,14 @@ Sample response:
 }
 ```
 
-## Deployment Notes
+## Deployment
 
-The project is deployed on Render using separate services:
+The project is deployed on Render using two services:
 
-1. Main website service: Node.js backend serving the React build.
-2. ML service: FastAPI app running with Uvicorn.
+1. A Node.js web service for the backend and React build.
+2. A Python web service for the FastAPI ML API.
 
-Main website Render environment variables:
+Main website environment variables:
 
 ```env
 NODE_ENV=production
@@ -388,44 +383,15 @@ ACCESS_TOKEN_SECRET=your-access-token-secret
 REFRESH_TOKEN_SECRET=your-refresh-token-secret
 ```
 
-ML Render environment variables:
+ML service environment variables:
 
 ```env
 CORS_ORIGIN=https://suraksha-darshan.onrender.com
 ```
-
-Render free services can sleep after inactivity. To reduce waiting, the frontend warms up the ML service by calling `/health` when the app loads and retries `/predict` during cold starts.
-
-## My Contribution
-
-- Built and connected the main web flow from temple search to slot booking and QR confirmation.
-- Developed React pages, routing, global booking context, protected booking flow, and booking history UI.
-- Integrated backend APIs for authentication, booking, cancellation, and slot availability.
-- Connected the React frontend with the FastAPI ML prediction service.
-- Fixed deployment issues around CORS, environment variables, cookies, Render service URLs, and ML cold starts.
-- Added production deployment support for serving the React build through the Express backend.
-
-## Interview Talking Points
-
-- Why separate ML service and web backend were used.
-- How JWT authentication and cookies are handled.
-- How MongoDB sessions help prevent overbooking.
-- How slot capacity changes based on predicted visitors.
-- How booking cancellation releases seats back to the slot.
-- How Render deployment works for frontend, backend, and ML services.
-- How cold starts were handled using frontend ML warm-up and retry logic.
-
-## Future Improvements
-
-- Add real-time admin analytics for crowd and booking trends.
-- Add payment gateway support for special darshan or parking.
-- Improve admin dashboard with booking management and reports.
-- Add SMS/email notifications for booking confirmation and cancellation.
-- Add live camera or sensor-based crowd updates if hardware data is available.
 
 ## Author
 
 Karan Kumar Khadria
 
 - GitHub: [karankumarkhadria](https://github.com/karankumarkhadria)
-- Project Demo: [SurakshaDarshan](https://suraksha-darshan.onrender.com)
+- Demo: [SurakshaDarshan](https://suraksha-darshan.onrender.com)
